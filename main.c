@@ -6,7 +6,7 @@
 /*   By: dlancar <dlancar@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2014/02/04 14:13:26 by dlancar           #+#    #+#             */
-/*   Updated: 2014/02/04 16:23:31 by dlancar          ###   ########.fr       */
+/*   Updated: 2014/02/08 17:08:33 by dlancar          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,59 +16,81 @@
 #include <libft.h>
 
 #define MEM_SIZE 30000
-#define STACK    255
 
 static unsigned char		memory[MEM_SIZE] = {0};
-static t_array	*loop_stack;
-static unsigned char		*pc = 0;
+static t_array				*loop_stack;
+static unsigned int			pc = 0;
+
+static void	init(void);
+static void	run(t_array *prog);
 
 static void	init(void)
 {
-	loop_stack = array_new(10, 10, sizeof(unsigned int), 0);
+	loop_stack = array_new(10, 10, sizeof(unsigned int), TRUE);
+	ft_bzero(memory, MEM_SIZE);
+}
+
+static void	skip_block(t_array *prog)
+{
+	unsigned int	size;
+	int				temp = 0;
+
+	size = loop_stack->size;
+	while (prog->it < prog->size && loop_stack->size >= size)
+	{
+		if (*(unsigned char *)array_get(prog, prog->it) == '[')
+			array_add(loop_stack, &prog->it);
+		else if (*(unsigned char *)array_get(prog, prog->it) == ']')
+		{
+			array_set(loop_stack, &temp, loop_stack->size - 1);
+			loop_stack->size--;
+		}
+		prog->it++;
+	}
 }
 
 /*
-** VM spec : Circular memory of MEM_SIZE unsigned char.
+** VM spec : Circular memory of MEM_SIZE (30 000) unsigned char.
 */
 static void	run(t_array	*prog)
 {
 	unsigned char	temp;
 
-	pc = memory;
+	pc = 0;
 	while (prog->it < prog->size)
 	{
 		temp = *(unsigned char *)array_next(prog);
 		switch (temp)
 		{
 			case '>' :
-				pc = (pc + 1 < memory + MEM_SIZE) ? pc + 1 : memory;
+				pc = (pc + 1 < MEM_SIZE) ? pc + 1 : 0;
 				break ;
 			case '<' :
-				pc = (pc - 1 >= memory) ? pc - 1 : memory + MEM_SIZE;
+				pc = (pc) ? pc - 1 : MEM_SIZE;
 				break ;
 			case '+' :
-				(*pc)++;
+				memory[pc]++;
 				break ;
 			case '-' :
-				(*pc)--;
+				memory[pc]--;
 				break ;
 			case '.' :
-				write(STDOUT, pc, 1);
+				write(STDOUT, &memory[pc], 1);
 				break ;
 			case ',' :
-				read(STDIN, pc, 1);
+				read(STDIN, &memory[pc], 1);
 				break ;
 			case '[' :
-				array_add(loop_stack, &prog->it);
+				if (!loop_stack->size)
+					array_add(loop_stack, &prog->it);
+				else if (pc != *(t_uint *)array_get(loop_stack, loop_stack->size - 1))
+					array_add(loop_stack, &prog->it);
+				if (!memory[pc])
+					skip_block(prog);
 				break ;
 			case ']' :
-				if (*pc)
-					prog->it = *(unsigned int *)array_get(loop_stack, loop_stack->size - 1);
-				else
-				{
-					temp = 0;
-					array_set(loop_stack, &temp, loop_stack->size + 1);
-				}
+				prog->it = *(unsigned int *)array_get(loop_stack, loop_stack->size - 1) - 1;
+				loop_stack->size--;
 				break ;
 			default :
 				break ;
@@ -91,7 +113,7 @@ int			main(int argc, char **argv)
 	fd = open(argv[1], O_RDONLY);
 	if (fd < 0)
 		ft_error();
-	prog = array_new(100, 100, sizeof(unsigned char), 0);
+	prog = array_new(100, 100, sizeof(unsigned char), TRUE);
 	while (ft_get_next(fd, &temp, '\n'))
 	{
 		while (*temp)
